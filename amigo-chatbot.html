@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amigo Soluciones — Chat IA</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── FLOATING BUTTON ── */
+  #as-btn {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #1a3a2a;
+    border: none;
+    cursor: pointer;
+    z-index: 9998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(26,58,42,0.45);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  #as-btn:hover { transform: scale(1.08); box-shadow: 0 6px 28px rgba(26,58,42,0.55); }
+  #as-btn svg { width: 26px; height: 26px; fill: #f5c842; transition: opacity 0.2s; }
+  #as-btn .icon-close { display: none; }
+
+  /* Notification dot */
+  #as-dot {
+    position: fixed;
+    bottom: 78px;
+    right: 28px;
+    width: 12px;
+    height: 12px;
+    background: #e04040;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    z-index: 9999;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.8; }
+  }
+
+  /* ── CHAT WINDOW ── */
+  #as-window {
+    position: fixed;
+    bottom: 100px;
+    right: 28px;
+    width: 370px;
+    max-height: 560px;
+    border-radius: 18px;
+    background: #fff;
+    border: 1px solid rgba(0,0,0,0.08);
+    box-shadow: 0 12px 48px rgba(0,0,0,0.18);
+    display: flex;
+    flex-direction: column;
+    z-index: 9997;
+    overflow: hidden;
+    transform: scale(0.88) translateY(20px);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1), opacity 0.2s;
+    font-family: 'DM Sans', system-ui, sans-serif;
+  }
+  #as-window.open {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  /* Header */
+  #as-header {
+    background: #1a3a2a;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    flex-shrink: 0;
+  }
+  .as-av {
+    width: 38px; height: 38px;
+    background: #f5c842;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px; color: #1a3a2a;
+    flex-shrink: 0;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .as-hinfo { flex: 1; }
+  .as-hname { color: #f5f5f0; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+  .as-hsub { color: #7daa8e; font-size: 11px; margin-top: 1px; }
+  .as-online {
+    width: 8px; height: 8px;
+    background: #4caf78;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px rgba(76,175,120,0.3);
+  }
+
+  /* API Key setup screen */
+  #as-setup {
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1;
+  }
+  .as-setup-title { font-size: 15px; font-weight: 600; color: #1a1a1a; }
+  .as-setup-desc { font-size: 13px; color: #666; line-height: 1.55; }
+  #as-apikey-input {
+    border: 1px solid #d0d0d0;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-family: 'DM Sans', sans-serif;
+    width: 100%;
+    color: #1a1a1a;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  #as-apikey-input:focus { border-color: #1a3a2a; }
+  #as-apikey-btn {
+    background: #1a3a2a;
+    color: #f5c842;
+    border: none;
+    border-radius: 10px;
+    padding: 11px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  #as-apikey-btn:hover { background: #254d38; }
+  .as-setup-link { font-size: 12px; color: #1a3a2a; text-decoration: underline; cursor: pointer; }
+
+  /* Messages */
+  #as-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: #f7f8f6;
+    scroll-behavior: smooth;
+  }
+  #as-messages::-webkit-scrollbar { width: 4px; }
+  #as-messages::-webkit-scrollbar-track { background: transparent; }
+  #as-messages::-webkit-scrollbar-thumb { background: #c8d4cc; border-radius: 4px; }
+
+  .as-msg { display: flex; gap: 8px; align-items: flex-end; max-width: 92%; }
+  .as-msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .as-msg.bot { align-self: flex-start; }
+
+  .as-msg-av {
+    width: 26px; height: 26px;
+    background: #1a3a2a;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700; color: #f5c842;
+    flex-shrink: 0;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .as-bubble {
+    padding: 9px 13px;
+    border-radius: 16px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    animation: msgIn 0.2s ease;
+  }
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: none; }
+  }
+  .as-msg.bot .as-bubble {
+    background: #fff;
+    color: #1a1a1a;
+    border: 1px solid rgba(0,0,0,0.07);
+    border-bottom-left-radius: 4px;
+  }
+  .as-msg.user .as-bubble {
+    background: #1a3a2a;
+    color: #f5f5f0;
+    border-bottom-right-radius: 4px;
+  }
+
+  /* Typing dots */
+  .as-typing span {
+    display: inline-block;
+    width: 5px; height: 5px;
+    background: #8ab89a;
+    border-radius: 50%;
+    margin: 0 2px;
+    animation: dot 1.2s infinite;
+  }
+  .as-typing span:nth-child(2) { animation-delay: 0.2s; }
+  .as-typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes dot {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-5px); }
+  }
+
+  /* Quick replies */
+  .as-quick { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+  .as-qbtn {
+    font-size: 11.5px;
+    padding: 5px 11px;
+    border: 1px solid #1a3a2a;
+    border-radius: 20px;
+    background: transparent;
+    color: #1a3a2a;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: background 0.15s, color 0.15s;
+    line-height: 1.3;
+  }
+  .as-qbtn:hover { background: #1a3a2a; color: #f5c842; }
+
+  /* Input area */
+  #as-input-area {
+    background: #fff;
+    border-top: 1px solid rgba(0,0,0,0.07);
+    padding: 10px 12px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  #as-input {
+    flex: 1;
+    border: 1px solid #d8ddd8;
+    border-radius: 20px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-family: 'DM Sans', sans-serif;
+    color: #1a1a1a;
+    background: #f7f8f6;
+    outline: none;
+    resize: none;
+    height: 36px;
+    transition: border-color 0.2s;
+  }
+  #as-input:focus { border-color: #1a3a2a; background: #fff; }
+  #as-send {
+    width: 36px; height: 36px;
+    background: #1a3a2a;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.2s, transform 0.1s;
+  }
+  #as-send:hover { background: #254d38; }
+  #as-send:active { transform: scale(0.92); }
+  #as-send:disabled { background: #c8d4cc; cursor: default; }
+  #as-send svg { width: 15px; height: 15px; fill: #f5c842; }
+
+  /* Footer */
+  #as-footer {
+    text-align: center;
+    font-size: 10px;
+    color: #aaa;
+    padding: 5px 0 7px;
+    background: #fff;
+    flex-shrink: 0;
+  }
+
+  /* Mobile */
+  @media (max-width: 420px) {
+    #as-window { width: calc(100vw - 24px); right: 12px; bottom: 90px; }
+    #as-btn { right: 16px; bottom: 16px; }
+    #as-dot { right: 16px; bottom: 68px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Notification dot -->
+<div id="as-dot"></div>
+
+<!-- Floating button -->
+<button id="as-btn" aria-label="Abrir chat Amigo Soluciones">
+  <!-- Chat icon -->
+  <svg class="icon-chat" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M20 2H4C2.9 2 2 2.9 2 4v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+  </svg>
+  <!-- Close icon -->
+  <svg class="icon-close" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+  </svg>
+</button>
+
+<!-- Chat window -->
+<div id="as-window" role="dialog" aria-label="Chat Amigo Soluciones">
+
+  <!-- Header -->
+  <div id="as-header">
+    <div class="as-av">AS</div>
+    <div class="as-hinfo">
+      <div class="as-hname">Amigo Soluciones IA</div>
+      <div class="as-hsub">Marketing Digital · Leads · Consultoría</div>
+    </div>
+    <div class="as-online"></div>
+  </div>
+
+  <!-- API Key Setup Screen -->
+  <div id="as-setup">
+    <div class="as-setup-title">Configura tu asistente</div>
+    <div class="as-setup-desc">Para activar el chat, ingresa tu API Key de Anthropic. Esta se guarda solo en tu navegador.</div>
+    <input id="as-apikey-input" type="password" placeholder="sk-ant-api03-..." autocomplete="off" />
+    <button id="as-apikey-btn">Activar chat</button>
+    <a class="as-setup-link" href="https://console.anthropic.com/settings/keys" target="_blank">Obtener mi API Key →</a>
+  </div>
+
+  <!-- Messages -->
+  <div id="as-messages" style="display:none;"></div>
+
+  <!-- Input -->
+  <div id="as-input-area" style="display:none;">
+    <input id="as-input" type="text" placeholder="Escribe tu mensaje..." maxlength="500" />
+    <button id="as-send">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+    </button>
+  </div>
+
+  <div id="as-footer">Amigo Soluciones Empresariales · Powered by Claude IA</div>
+
+</div>
+
+<script>
+(function() {
+  const SYSTEM = `Eres el asistente virtual de Amigo Soluciones Empresariales, empresa de California especializada en marketing digital con IA, generación de leads y consultoría empresarial para la comunidad latina en Estados Unidos.
+
+Tu nombre es Amigo IA. Eres profesional, cálido y hablas principalmente en español (responde en inglés solo si el usuario escribe en inglés).
+
+Servicios que puedes explicar:
+- Marketing digital con IA: Facebook Ads, TikTok Ads, SEO, contenido automatizado
+- Generación de leads B2B y B2C para cualquier industria
+- Consultoría empresarial para negocios latinos
+- Agentes de IA y automatización de procesos
+- Clientes: Barrera Financial Services (impuestos), The Extreme Collection USA (moda de lujo), LUXUS Sky Elite Society (aviación privada)
+
+Responde de forma concisa (máximo 3 oraciones), amigable y siempre orientada a generar interés. Si alguien quiere más información o una consulta, invítalos a contactar al equipo: info@amigosoluciones.com`;
+
+  const QUICK = ['¿Qué servicios ofrecen?', 'Quiero más leads para mi negocio', '¿Cómo funciona la IA?', 'Hablar con el equipo'];
+
+  let apiKey = localStorage.getItem('as_apikey') || '';
+  let history = [];
+  let loading = false;
+  let isOpen = false;
+
+  const btn = document.getElementById('as-btn');
+  const win = document.getElementById('as-window');
+  const dot = document.getElementById('as-dot');
+  const setup = document.getElementById('as-setup');
+  const apikeyInput = document.getElementById('as-apikey-input');
+  const apikeyBtn = document.getElementById('as-apikey-btn');
+  const msgs = document.getElementById('as-messages');
+  const inputArea = document.getElementById('as-input-area');
+  const input = document.getElementById('as-input');
+  const sendBtn = document.getElementById('as-send');
+  const iconChat = btn.querySelector('.icon-chat');
+  const iconClose = btn.querySelector('.icon-close');
+
+  function toggleChat() {
+    isOpen = !isOpen;
+    win.classList.toggle('open', isOpen);
+    iconChat.style.display = isOpen ? 'none' : 'block';
+    iconClose.style.display = isOpen ? 'block' : 'none';
+    dot.style.display = 'none';
+    if (isOpen && apiKey) setTimeout(() => input.focus(), 300);
+  }
+
+  btn.addEventListener('click', toggleChat);
+
+  apikeyBtn.addEventListener('click', function() {
+    const key = apikeyInput.value.trim();
+    if (!key.startsWith('sk-')) {
+      apikeyInput.style.borderColor = '#e04040';
+      return;
+    }
+    apiKey = key;
+    localStorage.setItem('as_apikey', key);
+    activateChat();
+  });
+
+  apikeyInput.addEventListener('keydown', e => { if (e.key === 'Enter') apikeyBtn.click(); });
+
+  function activateChat() {
+    setup.style.display = 'none';
+    msgs.style.display = 'flex';
+    inputArea.style.display = 'flex';
+    addBotMsg('¡Hola! Soy Amigo IA, tu asistente de Amigo Soluciones Empresariales. ¿En qué te puedo ayudar hoy?');
+    setTimeout(addQuickReplies, 350);
+    input.focus();
+  }
+
+  function addBotMsg(text) {
+    const wrap = document.createElement('div');
+    wrap.className = 'as-msg bot';
+    const av = document.createElement('div');
+    av.className = 'as-msg-av';
+    av.textContent = 'AS';
+    const bubble = document.createElement('div');
+    bubble.className = 'as-bubble';
+    bubble.textContent = text;
+    wrap.appendChild(av);
+    wrap.appendChild(bubble);
+    msgs.appendChild(wrap);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function addUserMsg(text) {
+    const wrap = document.createElement('div');
+    wrap.className = 'as-msg user';
+    const bubble = document.createElement('div');
+    bubble.className = 'as-bubble';
+    bubble.textContent = text;
+    wrap.appendChild(bubble);
+    msgs.appendChild(wrap);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function addTyping() {
+    const wrap = document.createElement('div');
+    wrap.className = 'as-msg bot';
+    wrap.id = 'as-typing';
+    const av = document.createElement('div');
+    av.className = 'as-msg-av';
+    av.textContent = 'AS';
+    const bubble = document.createElement('div');
+    bubble.className = 'as-bubble as-typing';
+    bubble.innerHTML = '<span></span><span></span><span></span>';
+    wrap.appendChild(av);
+    wrap.appendChild(bubble);
+    msgs.appendChild(wrap);
+    msgs.scrollTop = msgs.scrollHeight;
+    return wrap;
+  }
+
+  function addQuickReplies() {
+    const wrap = document.createElement('div');
+    wrap.className = 'as-msg bot';
+    const qDiv = document.createElement('div');
+    qDiv.className = 'as-quick';
+    QUICK.forEach(q => {
+      const b = document.createElement('button');
+      b.className = 'as-qbtn';
+      b.textContent = q;
+      b.onclick = () => { input.value = q; sendMessage(); };
+      qDiv.appendChild(b);
+    });
+    wrap.appendChild(qDiv);
+    msgs.appendChild(wrap);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  async function sendMessage() {
+    const text = input.value.trim();
+    if (!text || loading) return;
+    input.value = '';
+    loading = true;
+    sendBtn.disabled = true;
+
+    addUserMsg(text);
+    history.push({ role: 'user', content: text });
+
+    const typingEl = addTyping();
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-calls': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          system: SYSTEM,
+          messages: history
+        })
+      });
+
+      const data = await res.json();
+      typingEl.remove();
+
+      if (data.error) {
+        addBotMsg('Error: ' + (data.error.message || 'Verifica tu API Key.'));
+        loading = false; sendBtn.disabled = false;
+        return;
+      }
+
+      const reply = data.content && data.content[0] ? data.content[0].text : 'Lo siento, intenta de nuevo.';
+      addBotMsg(reply);
+      history.push({ role: 'assistant', content: reply });
+      if (history.length > 20) history = history.slice(-20);
+
+    } catch (e) {
+      typingEl.remove();
+      addBotMsg('Error de conexión. Verifica tu API Key e intenta de nuevo.');
+    }
+
+    loading = false;
+    sendBtn.disabled = false;
+    input.focus();
+  }
+
+  sendBtn.addEventListener('click', sendMessage);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+
+  if (apiKey) {
+    activateChat();
+  }
+
+  setTimeout(() => { if (!isOpen) dot.style.display = 'block'; }, 3000);
+})();
+</script>
+</body>
+</html>
